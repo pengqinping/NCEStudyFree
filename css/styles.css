@@ -21,8 +21,9 @@
   --danger-soft: #fbe4e0;
   --success: #15803d;
   --success-soft: #dff3e5;
-  --shadow: 0 12px 30px rgba(45, 52, 38, 0.08);
-  --shadow-sm: 0 4px 14px rgba(45, 52, 38, 0.06);
+  /* 分层阴影：贴地细节 + 大范围柔和扩散 */
+  --shadow: 0 1px 2px rgba(45, 52, 38, 0.05), 0 12px 32px rgba(45, 52, 38, 0.09);
+  --shadow-sm: 0 1px 2px rgba(45, 52, 38, 0.04), 0 4px 14px rgba(45, 52, 38, 0.06);
   --radius: 18px;
   --radius-sm: 12px;
   --maxw: 1160px;
@@ -49,16 +50,21 @@
   --danger-soft: #3a1f1c;
   --success: #6ddc98;
   --success-soft: #1b3a28;
-  --shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
-  --shadow-sm: 0 6px 18px rgba(0, 0, 0, 0.25);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px rgba(0, 0, 0, 0.36);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25), 0 6px 18px rgba(0, 0, 0, 0.26);
 }
 
 [data-font="sm"] { font-size: 15px; }
 [data-font="md"] { font-size: 16px; }
 [data-font="lg"] { font-size: 18px; }
 
-* { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  /* 应用式体验：避免下拉抖动露底（PWA/Tauri 壳内无意义） */
+  overscroll-behavior-y: none;
+}
 body {
   margin: 0;
   min-height: 100vh;
@@ -78,8 +84,21 @@ img { max-width: 100%; display: block; }
 [hidden] { display: none !important; }
 ::selection { background: var(--primary-soft); color: var(--ink); }
 
+/* 标题排版：多行标题自动平衡换行，观感更整齐 */
+h1, h2, h3 { text-wrap: balance; }
+
+/* 主题化滚动条（Windows/桌面 WebKit 与 Firefox） */
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: var(--line); border-radius: 999px;
+  border: 3px solid transparent; background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--muted); background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
 :focus-visible {
-  outline: 3px solid var(--primary);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -195,6 +214,8 @@ img { max-width: 100%; display: block; }
   transition: transform 0.16s, background 0.18s, border-color 0.18s, color 0.18s, box-shadow 0.18s;
 }
 .btn:hover:not(:disabled):not(.is-disabled) { transform: translateY(-1px); }
+/* 触屏按压回弹：抬起时由 transform 过渡自然回弹 */
+.btn:active:not(:disabled):not(.is-disabled) { transform: scale(0.97); transition-duration: 0.06s; }
 .btn:disabled, .btn.is-disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 6px 16px rgba(20, 83, 45, 0.18); }
 [data-theme="dark"] .btn-primary { color: #07130c; }
@@ -412,6 +433,7 @@ img { max-width: 100%; display: block; }
 }
 .unit-row:last-child { border-bottom: 0; }
 .unit-row:hover { background: color-mix(in srgb, var(--primary) 5%, var(--surface)); }
+.unit-row:active { background: color-mix(in srgb, var(--primary) 9%, var(--surface)); }
 .unit-index { display: flex; align-items: baseline; gap: 2px; color: var(--muted); font-family: var(--serif); }
 .unit-index strong { font-size: 22px; color: var(--ink-2); }
 .unit-index small { font-size: 11px; }
@@ -487,6 +509,8 @@ img { max-width: 100%; display: block; }
 }
 .sentence:last-child { border-bottom: 0; }
 .sentence:hover { background: color-mix(in srgb, var(--primary) 4%, var(--surface)); }
+/* 触屏无 hover，按压时给同等强度的反馈 */
+.sentence:active { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
 .sentence.is-active { background: var(--primary-soft); box-shadow: inset 3px 0 0 var(--primary); }
 .sentence-play {
   width: 30px; height: 30px; border-radius: 50%;
@@ -632,7 +656,7 @@ img { max-width: 100%; display: block; }
 .flashcard-front, .flashcard-back { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .flashcard-back { display: none; }
 .flashcard.is-flipped .flashcard-front { display: none; }
-.flashcard.is-flipped .flashcard-back { display: flex; }
+.flashcard.is-flipped .flashcard-back { display: flex; animation: fade-up 0.18s ease both; }
 .flash-word {
   margin: 0;
   font-family: var(--serif);
@@ -866,7 +890,7 @@ img { max-width: 100%; display: block; }
   .settings-card { padding: 16px; }
   .setting-row { align-items: flex-start; flex-direction: column; gap: 6px; }
   .setting-row .select { width: 100%; max-width: none; }
-  .search-input { min-height: 48px; font-size: 15px; }
+  .search-input { min-height: 48px; font-size: 16px; } /* ≥16px 避免 iOS 聚焦自动放大 */
   .site-footer { padding-bottom: 76px; }
   .footer-inner { padding: 20px 14px 24px; }
   .bottom-nav {
@@ -874,11 +898,35 @@ img { max-width: 100%; display: block; }
     background: color-mix(in srgb, var(--surface) 94%, transparent);
     backdrop-filter: blur(16px);
     border-top: 1px solid var(--line);
+    padding-top: 4px;
     padding-bottom: env(safe-area-inset-bottom);
   }
-  .bottom-link { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px 7px; color: var(--muted); font-size: 10px; }
-  .bottom-link.is-active { color: var(--primary); }
+  .bottom-link {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; min-height: 48px; padding: 6px 4px;
+    margin: 0 5px; border-radius: 12px;
+    color: var(--muted); font-size: 10px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .bottom-link:active { background: var(--surface-2); }
+  .bottom-link.is-active { color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); }
   .toast-root { bottom: 82px; }
+
+  /* Modal 移动端改为底部弹层，贴合拇指操作区 */
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal {
+    width: 100%; max-height: 86vh; overflow: auto;
+    border-radius: 18px 18px 0 0; border-bottom: 0;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+    transform: translateY(28px);
+  }
+  .modal-overlay.show .modal { transform: none; }
+}
+
+/* 触屏设备：保证核心点击目标 ≥ 44px */
+@media (pointer: coarse) {
+  .icon-btn { width: 42px; height: 42px; }
+  .icon-btn.tiny { width: 34px; height: 34px; }
 }
 
 @media (max-width: 420px) {
