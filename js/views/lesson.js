@@ -32,9 +32,11 @@ export async function renderLesson(container, ctx, bookId, unitId) {
     container.appendChild(emptyPanel('没有找到这本教材', '请从首页重新选择。'));
     return;
   }
-  await ctx.ensureBookData(bookId);
+  const bookData = await ctx.ensureBookData(bookId);
   if (ctx.signal.aborted) return;
-  const unit = ctx.getUnit(bookId, unitId);
+  // 单元完整内容按需加载（资源包按单元分文件）
+  const unit = (await ctx.loadUnit(bookId, unitId)) || ctx.getUnit(bookId, unitId);
+  const bookUnits = bookData?.units || [];
   if (!unit) {
     container.appendChild(emptyPanel('没有找到这一课', '课号可能已变化，请返回课程列表重新选择。'));
     return;
@@ -113,9 +115,9 @@ export async function renderLesson(container, ctx, bookId, unitId) {
   updateStatusButton();
   updateFavorite();
 
-  const unitIndex = window.NCE.booksData[bookId].units.findIndex((item) => item.id === unit.id);
-  const prevUnit = window.NCE.booksData[bookId].units[unitIndex - 1];
-  const nextUnit = window.NCE.booksData[bookId].units[unitIndex + 1];
+  const unitIndex = bookUnits.findIndex((item) => item.id === unit.id);
+  const prevUnit = bookUnits[unitIndex - 1];
+  const nextUnit = bookUnits[unitIndex + 1];
 
   const navButton = (target, label, iconName) =>
     target

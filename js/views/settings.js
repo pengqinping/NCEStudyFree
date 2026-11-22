@@ -1,5 +1,12 @@
 import { store, dayKey } from '../store.js';
 import { h, icon, toast, confirmDialog } from '../ui.js';
+import {
+  getCatalogUrl,
+  setCatalogUrl,
+  isAutoCheckEnabled,
+  setAutoCheckEnabled,
+  DEFAULT_CATALOG_URL,
+} from '../content/pack-manager.js';
 
 const THEMES = [
   { value: 'system', label: '跟随系统' },
@@ -250,6 +257,231 @@ export async function renderSettings(container, ctx) {
     '清空当前档案',
   );
 
+  // ---------- 课程资源包 ----------
+  const packs = ctx.courseProvider?.packs || null;
+  const packListHost = h('div', { class: 'setting-group pack-list' });
+  const SOURCE_LABELS = { bundled: '内置', download: '下载安装', import: '本地导入' };
+
+  function formatSize(bytes) {
+    if (!Number.isFinite(bytes)) return '';
+    if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    return `${Math.round(bytes / 1024)} KB`;
+  }
+
+  function renderPackList() {
+    const entries = packs?.listPacks?.() || [];
+    packListHost.replaceChildren(
+      ...(entries.length
+        ? entries.map((entry) =>
+            h(
+              'div',
+              { class: 'pack-summary' },
+              h(
+                'div',
+                {},
+                h('strong', {}, entry.name || entry.packId),
+                h('span', { class: 'muted' }, ` v${entry.version} · ${entry.bookCount} 册`),
+              ),
+              h('span', { class: 'badge' }, SOURCE_LABELS[entry.source] || entry.source),
+              entry.source !== 'bundled'
+                ? h(
+                    'button',
+                    {
+                      type: 'button',
+                      class: 'icon-btn',
+                      'aria-label': `移除 ${entry.packId}`,
+                      title: '移除已安装副本（回退到内置版本）',
+                      onclick: async () => {
+                        const ok = await confirmDialog(
+                          '移除已安装的资源包副本后，该课程将回退到内置版本。学习进度不受影响。',
+                          { title: '移除资源包', confirmText: '移除' },
+                        );
+                        if (!ok) return;
+                        try {
+                          await packs.removePack(entry.packId);
+                          toast('资源包已移除', 'success');
+                        } catch (error) {
+                          toast(`移除失败：${error.message}`, 'error');
+                        }
+                      },
+                    },
+                    icon('trash', 16),
+                  )
+                : null,
+            ),
+          )
+        : [h('p', { class: 'muted' }, '暂无已加载的资源包')]),
+    );
+  }
+  renderPackList();
+  const unsubscribePacks = packs?.subscribe?.(() => renderPackList()) || (() => {});
+
+  const packFileInput = h('input', { type: 'file', accept: '.ncepack,application/zip', hidden: true });
+  packFileInput.addEventListener('change', async () => {
+    const file = packFileInput.files?.[0];
+    if (!file) return;
+    toast('正在安装资源包…', 'info', 10000);
+    try {
+      const manifest = await packs.installFromFile(file);
+      toast(`已安装 ${manifest.name} v${manifest.version}`, 'success', 5000);
+    } catch (error) {
+      toast(`安装失败：${error.message}`, 'error', 6000);
+    }
+    packFileInput.value = '';
+  });
+  const importPackButton = h(
+    'button',
+    {
+      type: 'button',
+      class: 'btn btn-ghost',
+      onclick: () => packFileInput.click(),
+      disabled: !packs,
+    },
+    icon('upload', 16),
+    '导入资源包',
+  );
+
+  // 目录源与自动检查（P3 包市场）
+  const updatesHost = h('div', { class: 'pack-updates' });
+  const currentCatalogUrl = getCatalogUrl();
+  const catalogInput = h('input', {
+    class: 'input',
+    type: 'url',
+    placeholder: DEFAULT_CATALOG_URL,
+    value: currentCatalogUrl === DEFAULT_CATALOG_URL ? '' : currentCatalogUrl,
+    'aria-label': '资源包目录地址',
+  });
+  const saveCatalogButton = h(
+    'button',
+    {
+      type: 'button',
+      class: 'btn btn-ghost btn-sm',
+      onclick: () => {
+        try {
+          // 立即用新目录探活，尽早发现配置错误
+          setCatalogUrl(catalogInput.value);
+          toast('目录地址已保存', 'success');
+        } catch (error) {
+          toast(`保存失败：${error.message}`, 'error');
+        }
+      },
+    },
+    '保存',
+  );
+  const autoCheckToggle = h(
+    'label',
+    { class: 'switch-row' },
+    h('span', {}, '启动时自动检查资源包更新'),
+    h('input', {
+      type: 'checkbox',
+      checked: isAutoCheckEnabled(),
+      onchange: (event) => {
+        setAutoCheckEnabled(event.target.checked);
+        toast(event.target.checked ? '已开启启动检查' : '已关闭启动检查', 'info');
+      },
+    }),
+  );
+
+  function updateRowButton(entry, host) {
+    return h(
+      'button',
+      {
+        type: 'button',
+        class: 'btn btn-primary btn-sm',
+        onclick: async (event) => {
+          const button = event.currentTarget;
+          button.disabled = true;
+          button.textContent = '下载中…';
+          try {
+            const manifest = await packs.installFromUrl(entry.url, entry);
+            toast(`已更新 ${manifest.name} v${manifest.version}`, 'success', 5000);
+            renderUpdates(host);
+          } catch (error) {
+            toast(`更新失败：${error.message}`, 'error', 6000);
+            button.disabled = false;
+            button.textContent = '更新';
+          }
+        },
+      },
+      '更新',
+    );
+  }
+
+  function renderUpdates(host = updatesHost) {
+    host.replaceChildren(h('p', { class: 'muted' }, '正在检查更新…'));
+    packs
+      .checkUpdates(getCatalogUrl())
+      .then(({ updates, generatedAt }) => {
+        if (!updates.length) {
+          host.replaceChildren(
+            h(
+              'p',
+              { class: 'muted' },
+              `资源包已是最新版本${generatedAt ? `（目录更新于 ${String(generatedAt).slice(0, 10)}）` : ''}`,
+            ),
+          );
+          return;
+        }
+        const rows = updates.map((entry) =>
+          h(
+            'div',
+            { class: 'pack-summary' },
+            h(
+              'div',
+              {},
+              h('strong', {}, entry.name || entry.packId),
+              h('span', { class: 'muted' }, ` v${entry.version}${entry.size ? ` · ${formatSize(entry.size)}` : ''}`),
+            ),
+            updateRowButton(entry, host),
+          ),
+        );
+        host.replaceChildren(
+          ...rows,
+          h(
+            'div',
+            { class: 'data-actions' },
+            h(
+              'button',
+              {
+                type: 'button',
+                class: 'btn btn-primary btn-sm',
+                onclick: async (event) => {
+                  const button = event.currentTarget;
+                  button.disabled = true;
+                  try {
+                    for (const entry of updates) {
+                      button.textContent = `更新中 ${entry.packId}…`;
+                      await packs.installFromUrl(entry.url, entry);
+                    }
+                    toast(`已更新 ${updates.length} 个资源包`, 'success', 5000);
+                  } catch (error) {
+                    toast(`更新失败：${error.message}`, 'error', 6000);
+                  }
+                  renderUpdates(host);
+                },
+              },
+              '全部更新',
+            ),
+          ),
+        );
+      })
+      .catch((error) => {
+        host.replaceChildren(h('p', { class: 'muted' }, `检查失败：${error.message}`));
+      });
+  }
+
+  const checkUpdatesButton = h(
+    'button',
+    {
+      type: 'button',
+      class: 'btn btn-ghost',
+      disabled: !packs,
+      onclick: () => renderUpdates(),
+    },
+    icon('download', 16),
+    '检查更新',
+  );
+
   container.append(
     h(
       'header',
@@ -335,6 +567,32 @@ export async function renderSettings(container, ctx) {
         ),
       ),
       settingsCard(
+        'book',
+        '课程资源包',
+        '课程内容以资源包形式动态加载；学习进度独立保存，更新包不会丢失进度。',
+        h(
+          'div',
+          { class: 'setting-group' },
+          packListHost,
+          updatesHost,
+          h('div', { class: 'data-actions' }, importPackButton, checkUpdatesButton),
+          packFileInput,
+          h(
+            'label',
+            { class: 'setting-row' },
+            h('span', {}, '目录地址'),
+            catalogInput,
+            saveCatalogButton,
+          ),
+          autoCheckToggle,
+          h(
+            'p',
+            { class: 'muted storage-note' },
+            '支持导入 .ncepack 文件；目录地址可指向远端 catalog.json（默认使用应用内目录）。',
+          ),
+        ),
+      ),
+      settingsCard(
         'note',
         '关于',
         'NCE StudyFree · 新概念英语 1–4 本地学习站',
@@ -358,5 +616,8 @@ export async function renderSettings(container, ctx) {
     ),
   );
 
-  return () => unsubscribeVoices();
+  return () => {
+    unsubscribeVoices();
+    unsubscribePacks();
+  };
 }

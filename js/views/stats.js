@@ -30,7 +30,7 @@ function lastSevenDays(store) {
 
 export async function renderStats(container, ctx) {
   const { store } = ctx;
-  const books = window.NCE.books;
+  const books = await ctx.listBooks();
   const totalUnits = books.reduce((sum, book) => sum + book.units, 0);
   const progress = store.state.progress;
   const done = Object.values(progress).filter((item) => item.status === 'done').length;

@@ -10,6 +10,7 @@
   "scripts": {
     "fetch": "node tools/fetch-sources.mjs",
     "build": "node tools/build-data.mjs",
+    "build:pack": "node tools/build-pack.mjs",
     "validate": "node tools/validate-data.mjs",
     "serve": "node tools/serve.mjs",
     "test": "node --test",

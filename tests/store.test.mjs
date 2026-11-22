@@ -25,7 +25,7 @@ function makeStore() {
 test('空存储加载默认状态', () => {
   const { store } = makeStore();
   store.load();
-  assert.equal(store.state.version, 1);
+  assert.equal(store.state.version, 2);
   assert.deepEqual(store.state.progress, {});
   assert.equal(store.state.settings.theme, 'system');
 });
@@ -34,11 +34,11 @@ test('访问课程会记录进度、最近课程与连续天数', () => {
   const { store } = makeStore();
   store.load();
   store.markVisit('b1-u01', { id: 'b1-u01', title: 'Excuse Me', book: 1, lessonFrom: 1, lessonTo: 2 });
-  assert.equal(store.state.progress['b1-u01'].status, 'learning');
-  assert.equal(store.state.lastLesson, 'b1-u01');
+  assert.equal(store.state.progress['nce1:u01'].status, 'learning');
+  assert.equal(store.state.lastLesson, 'nce1:u01');
   assert.equal(store.state.lastLessonMeta.title, 'Excuse Me');
   assert.equal(store.state.streak.current, 1);
-  assert.equal(store.state.daily[Object.keys(store.state.daily)[0]].lessons[0], 'b1-u01');
+  assert.equal(store.state.daily[Object.keys(store.state.daily)[0]].lessons[0], 'nce1:u01');
 });
 
 test('答错进入错题本，连续答对两次移出', () => {
@@ -46,11 +46,11 @@ test('答错进入错题本，连续答对两次移出', () => {
   store.load();
   const question = { id: 'b1-u01-q01', kind: 'text', answer: 'pardon', prompt: '拼写' };
   store.recordAnswer('b1-u01', question, false, 'pardom');
-  assert.equal(store.state.mistakes[question.id].wrong, 1);
+  assert.equal(store.state.mistakes['nce1:u01-q01'].wrong, 1);
   store.recordAnswer('b1-u01', question, true, 'pardon');
-  assert.equal(store.state.mistakes[question.id].correctStreak, 1);
+  assert.equal(store.state.mistakes['nce1:u01-q01'].correctStreak, 1);
   store.recordAnswer('b1-u01', question, true, 'pardon');
-  assert.equal(store.state.mistakes[question.id], undefined);
+  assert.equal(store.state.mistakes['nce1:u01-q01'], undefined);
 });
 
 test('生词加入、评分与到期', () => {
@@ -59,7 +59,7 @@ test('生词加入、评分与到期', () => {
   const vocab = { word: 'handbag', phonetic: '/ˈhændbæɡ/', meanings: [{ pos: 'noun', meaning: '手提包' }] };
   assert.equal(store.addSrs(vocab, 'b1-u01'), true);
   assert.equal(store.addSrs(vocab, 'b1-u01'), false);
-  const card = store.state.srs['b1-u01:handbag'];
+  const card = store.state.srs['nce1:u01:handbag'];
   assert.ok(card);
   assert.equal(store.dueSrs().length, 1);
   const updated = store.gradeSrs(card.id, 'good');
@@ -87,9 +87,9 @@ test('导出/导入往返保留进度、生词和笔记', () => {
   const { store: restored } = makeStore();
   restored.load();
   restored.importData(backup);
-  assert.equal(restored.state.progress['b1-u01'].status, 'learning');
-  assert.equal(restored.state.notes['b1-u01'], 'note');
-  assert.ok(restored.state.srs['b1-u01:pardon']);
+  assert.equal(restored.state.progress['nce1:u01'].status, 'learning');
+  assert.equal(restored.state.notes['nce1:u01'], 'note');
+  assert.ok(restored.state.srs['nce1:u01:pardon']);
 });
 
 test('损坏的 localStorage 会备份并回退默认状态', () => {
@@ -107,7 +107,7 @@ test('导入非法备份会抛错且不破坏现有状态', () => {
   store.load();
   store.markVisit('b1-u01');
   assert.throws(() => store.importData('{"version":1}'), /缺少/);
-  assert.equal(store.state.progress['b1-u01'].status, 'learning');
+  assert.equal(store.state.progress['nce1:u01'].status, 'learning');
 });
 
 test('结构损坏的 JSON 会丢弃坏条目并备份原数据', () => {
@@ -134,7 +134,7 @@ test('结构损坏的 JSON 会丢弃坏条目并备份原数据', () => {
   assert.equal(store.state.notes.bad, undefined);
   assert.equal(store.state.notes.good, 'ok');
   assert.equal(store.state.daily.bad, undefined);
-  assert.deepEqual(store.state.favorites, ['b1-u01']);
+  assert.deepEqual(store.state.favorites, ['nce1:u01']);
   assert.doesNotThrow(() => store.dueSrs());
   const corruptKey = [...storage.map.keys()].find((key) => key.startsWith('nce-study:v1:corrupt:'));
   assert.ok(corruptKey);
@@ -153,12 +153,12 @@ test('applyExternalState 接收另一标签较新的状态，忽略较旧状态'
     updatedAt: Date.now() + 1000,
   });
   assert.equal(store.applyExternalState(newer), true);
-  assert.ok(store.state.progress['b1-u02']);
+  assert.ok(store.state.progress['nce1:u02']);
   const older = JSON.stringify({
     ...store.state,
     progress: { 'b1-u03': { status: 'learning', lastVisit: 1 } },
     updatedAt: 1,
   });
   assert.equal(store.applyExternalState(older), false);
-  assert.equal(store.state.progress['b1-u03'], undefined);
+  assert.equal(store.state.progress['nce1:u03'], undefined);
 });

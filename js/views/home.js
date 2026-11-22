@@ -44,7 +44,7 @@ function bookCard(store, book) {
 
 export async function renderHome(container, ctx) {
   const { store } = ctx;
-  const books = window.NCE.books;
+  const books = await ctx.listBooks();
   const totalUnits = books.reduce((sum, book) => sum + book.units, 0);
   const progressEntries = Object.values(store.state.progress);
   const doneCount = progressEntries.filter((progress) => progress.status === 'done').length;

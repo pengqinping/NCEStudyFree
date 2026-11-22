@@ -1,5 +1,5 @@
-/* NCE StudyFree service worker：离线缓存与按册数据更新。 */
-const CACHE = 'nce-study-v6';
+/* NCE StudyFree service worker：离线缓存（壳文件静态清单 + 资源包内容编程式预缓存）。 */
+const CACHE = 'nce-study-v8';
 const CORE = [
   './',
   './index.html',
@@ -15,6 +15,12 @@ const CORE = [
   './js/ui.js',
   './js/tts.js',
   './js/recorder.js',
+  './js/content/content-id.js',
+  './js/content/pack-format.js',
+  './js/content/pack-storage.js',
+  './js/content/pack-manager.js',
+  './js/content/provider.js',
+  './js/vendor/fflate.js',
   './js/views/home.js',
   './js/views/book.js',
   './js/views/lesson.js',
@@ -22,12 +28,14 @@ const CORE = [
   './js/views/stats.js',
   './js/views/settings.js',
   './js/views/search.js',
-  './data/books.js',
-  './data/search-index.js',
-  './data/book1.js',
-  './data/book2.js',
-  './data/book3.js',
-  './data/book4.js',
+  './data/packs/bundled.json',
+  './data/catalog.json',
+  './data/packs/nce-core-1-4/manifest.json',
+  './data/packs/nce-core-1-4/search-index.json',
+  './data/packs/nce-core-1-4/content/book1/book.json',
+  './data/packs/nce-core-1-4/content/book2/book.json',
+  './data/packs/nce-core-1-4/content/book3/book.json',
+  './data/packs/nce-core-1-4/content/book4/book.json',
   './assets/icons/favicon.svg',
   './assets/icons/favicon.ico',
   './assets/icons/favicon-16.png',
@@ -51,10 +59,38 @@ self.addEventListener('install', (event) => {
           }
         }),
       );
+
+      // 课程资源包内容：按 manifest 编程式预缓存（276 个单元 JSON，约 4MB），
+      // 保证与旧版整册数据一致的离线体验；单元文件是按需 fetch 的，必须装进首装缓存
+      let packEntries = 0;
+      try {
+        const bundled = await (await fetch('./data/packs/bundled.json')).json();
+        for (const pack of bundled.packs || []) {
+          const base = pack.base;
+          await cache.add(`${base}/manifest.json`);
+          const manifest = await (await fetch(`${base}/manifest.json`)).json();
+          await cache.add(`${base}/search-index.json`);
+          for (const book of manifest.books || []) {
+            // manifest.books[].entry 相对包根，必须拼上 base
+            await cache.add(`${base}/${book.entry}`);
+            const bookData = await (await fetch(`${base}/${book.entry}`)).json();
+            for (const unit of bookData.units || []) {
+              await cache.add(
+                `${base}/content/book${book.id}/units/u${String(unit.unit).padStart(2, '0')}.json`,
+              );
+              packEntries += 1;
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('[sw] 资源包预缓存失败', error);
+        failed += 1;
+      }
+
       if (failed) {
         // 安装失败时保留旧缓存，避免用不完整的离线包替换可用版本
         await caches.delete(CACHE);
-        throw new Error(`NCE StudyFree: ${failed} 个核心资源缓存失败`);
+        throw new Error(`NCE StudyFree: ${failed} 个核心资源缓存失败（${packEntries} 个单元已缓存）`);
       }
       await self.skipWaiting();
     })(),

@@ -9,9 +9,10 @@ import {
   isDue,
   sortByDue,
 } from './srs.js';
+import { toContentId } from './content/content-id.js';
 
 export const STORAGE_KEY = 'nce-study:v1';
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 
 export function dayKey(date = new Date()) {
   const year = date.getFullYear();
@@ -58,11 +59,15 @@ function mergeState(raw, onSanitize = null) {
   const base = defaultState();
   const parsed = isObject(raw) ? raw : {};
   let dropped = 0;
+  const lastLessonMeta = isObject(parsed.lastLessonMeta) ? parsed.lastLessonMeta : null;
   const state = {
     ...base,
     version: STATE_VERSION,
-    lastLesson: typeof parsed.lastLesson === 'string' ? parsed.lastLesson : '',
-    lastLessonMeta: isObject(parsed.lastLessonMeta) ? parsed.lastLessonMeta : null,
+    // 旧课号 b1-u01 迁移为稳定内容 ID nce1:u01（进度与资源包版本解耦）
+    lastLesson: typeof parsed.lastLesson === 'string' ? toContentId(parsed.lastLesson) : '',
+    lastLessonMeta: lastLessonMeta
+      ? { ...lastLessonMeta, id: toContentId(lastLessonMeta.id) }
+      : null,
     createdAt: Number.isFinite(parsed.createdAt) ? parsed.createdAt : base.createdAt,
     updatedAt: Number.isFinite(parsed.updatedAt) ? parsed.updatedAt : base.updatedAt,
   };
@@ -90,7 +95,7 @@ function mergeState(raw, onSanitize = null) {
       dropped += 1;
       continue;
     }
-    state.progress[id] = {
+    state.progress[toContentId(id)] = {
       ...progress,
       status: ['new', 'learning', 'done'].includes(progress.status) ? progress.status : 'new',
       visits: Math.max(0, Math.floor(clampNumber(progress.visits, 0, 1e9, 0))),
@@ -111,9 +116,10 @@ function mergeState(raw, onSanitize = null) {
       dropped += 1;
       continue;
     }
-    state.srs[id] = {
+    state.srs[toContentId(id)] = {
       ...card,
-      id: typeof card.id === 'string' ? card.id : id,
+      id: typeof card.id === 'string' ? toContentId(card.id) : toContentId(id),
+      lessonId: toContentId(card.lessonId || ''),
       phonetic: typeof card.phonetic === 'string' ? card.phonetic : '',
       pos: typeof card.pos === 'string' ? card.pos : '',
       meaning: typeof card.meaning === 'string' ? card.meaning : '',
@@ -139,7 +145,14 @@ function mergeState(raw, onSanitize = null) {
       dropped += 1;
       continue;
     }
-    state.mistakes[id] = mistake;
+    state.mistakes[toContentId(id)] = {
+      ...mistake,
+      lessonId: toContentId(mistake.lessonId),
+      question: { ...mistake.question, id: toContentId(mistake.question.id) },
+      lessonMeta: isObject(mistake.lessonMeta)
+        ? { ...mistake.lessonMeta, id: toContentId(mistake.lessonMeta.id) }
+        : mistake.lessonMeta,
+    };
   }
 
   state.notes = {};
@@ -149,7 +162,7 @@ function mergeState(raw, onSanitize = null) {
       dropped += 1;
       continue;
     }
-    state.notes[id] = note;
+    state.notes[toContentId(id)] = note;
   }
 
   state.daily = {};
@@ -163,12 +176,14 @@ function mergeState(raw, onSanitize = null) {
       seconds: Math.max(0, Math.floor(clampNumber(entry.seconds, 0, 86400, 0))),
       answered: Math.max(0, Math.floor(clampNumber(entry.answered, 0, 1e6, 0))),
       correct: Math.max(0, Math.floor(clampNumber(entry.correct, 0, 1e6, 0))),
-      lessons: Array.isArray(entry.lessons) ? entry.lessons.filter((id) => typeof id === 'string') : [],
+      lessons: Array.isArray(entry.lessons)
+        ? entry.lessons.filter((id) => typeof id === 'string').map(toContentId)
+        : [],
     };
   }
 
   state.favorites = Array.isArray(parsed.favorites)
-    ? [...new Set(parsed.favorites.filter((id) => typeof id === 'string'))]
+    ? [...new Set(parsed.favorites.filter((id) => typeof id === 'string').map(toContentId))]
     : [];
 
   onSanitize?.(dropped);
@@ -332,14 +347,16 @@ export class Store {
   }
 
   // ---------- 进度 ----------
+  // 所有课号统一归一化为稳定内容 ID（nce1:u01），兼容旧 b1-u01 传参
   getProgress(lessonId) {
-    const progress = this.state.progress[lessonId];
+    const progress = this.state.progress[toContentId(lessonId)];
     return progress
       ? { status: 'new', visits: 0, bestScore: 0, ...progress }
       : { status: 'new', visits: 0, bestScore: 0 };
   }
 
   markVisit(lessonId, meta = null) {
+    lessonId = toContentId(lessonId);
     const progress = this.getProgress(lessonId);
     progress.visits = (progress.visits || 0) + 1;
     progress.lastVisit = Date.now();
@@ -356,6 +373,7 @@ export class Store {
   }
 
   setStatus(lessonId, status) {
+    lessonId = toContentId(lessonId);
     const progress = this.getProgress(lessonId);
     progress.status = status;
     if (status === 'done') {
@@ -369,6 +387,7 @@ export class Store {
   }
 
   markScore(lessonId, score) {
+    lessonId = toContentId(lessonId);
     const progress = this.getProgress(lessonId);
     progress.bestScore = Math.max(progress.bestScore || 0, score);
     if (score >= 0.8 && progress.status !== 'done') {
@@ -380,6 +399,7 @@ export class Store {
   }
 
   toggleFavorite(lessonId) {
+    lessonId = toContentId(lessonId);
     const index = this.state.favorites.indexOf(lessonId);
     if (index >= 0) this.state.favorites.splice(index, 1);
     else this.state.favorites.push(lessonId);
@@ -388,7 +408,7 @@ export class Store {
   }
 
   isFavorite(lessonId) {
-    return this.state.favorites.includes(lessonId);
+    return this.state.favorites.includes(toContentId(lessonId));
   }
 
   // ---------- 每日统计与连续天数 ----------
@@ -415,30 +435,32 @@ export class Store {
   }
 
   recordAnswer(lessonId, question, correct, responseText = '', lessonMeta = null) {
+    lessonId = toContentId(lessonId);
+    const questionId = toContentId(question?.id);
     const day = this.touchDay();
     day.answered = (day.answered || 0) + 1;
     if (correct) day.correct = (day.correct || 0) + 1;
     if (!day.lessons.includes(lessonId)) day.lessons.push(lessonId);
 
     if (!correct) {
-      const existing = this.state.mistakes[question.id] || {
+      const existing = this.state.mistakes[questionId] || {
         question,
         lessonId,
         wrong: 0,
         correctStreak: 0,
       };
-      existing.question = question;
+      existing.question = { ...question, id: questionId };
       existing.lessonId = lessonId;
-      if (lessonMeta) existing.lessonMeta = lessonMeta;
+      if (lessonMeta) existing.lessonMeta = { ...lessonMeta, id: toContentId(lessonMeta.id) };
       existing.wrong = (existing.wrong || 0) + 1;
       existing.lastWrong = Date.now();
       existing.lastAnswer = responseText;
       existing.correctStreak = 0;
-      this.state.mistakes[question.id] = existing;
-    } else if (this.state.mistakes[question.id]) {
-      const mistake = this.state.mistakes[question.id];
+      this.state.mistakes[questionId] = existing;
+    } else if (this.state.mistakes[questionId]) {
+      const mistake = this.state.mistakes[questionId];
       mistake.correctStreak = (mistake.correctStreak || 0) + 1;
-      if (mistake.correctStreak >= 2) delete this.state.mistakes[question.id];
+      if (mistake.correctStreak >= 2) delete this.state.mistakes[questionId];
     }
     this.commit();
   }
@@ -449,7 +471,7 @@ export class Store {
 
   // ---------- 生词 SRS ----------
   addSrs(vocab, lessonId) {
-    const card = createCard(vocab, lessonId);
+    const card = createCard(vocab, toContentId(lessonId));
     if (this.state.srs[card.id]) return false;
     this.state.srs[card.id] = card;
     this.commit();
@@ -457,7 +479,7 @@ export class Store {
   }
 
   hasSrs(vocab, lessonId) {
-    return Boolean(this.state.srs[`${lessonId}:${vocab.word}`]);
+    return Boolean(this.state.srs[`${toContentId(lessonId)}:${vocab.word}`]);
   }
 
   removeSrs(cardId) {
@@ -489,13 +511,13 @@ export class Store {
 
   // ---------- 笔记 ----------
   getNote(lessonId) {
-    return this.state.notes[lessonId] || '';
+    return this.state.notes[toContentId(lessonId)] || '';
   }
 
   saveNote(lessonId, text) {
     const value = String(text || '').trimEnd();
-    if (value.trim()) this.state.notes[lessonId] = value;
-    else delete this.state.notes[lessonId];
+    if (value.trim()) this.state.notes[toContentId(lessonId)] = value;
+    else delete this.state.notes[toContentId(lessonId)];
     this.commit();
   }
 

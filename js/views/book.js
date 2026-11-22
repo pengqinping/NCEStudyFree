@@ -44,9 +44,9 @@ function unitRow(unit, store) {
         { class: 'unit-sub' },
         unit.titleZh || lessonLabel(unit),
         h('span', { class: 'dot' }, '·'),
-        `${unit.sentences.length} 句`,
+        `${unit.sentenceCount ?? unit.sentences?.length ?? 0} 句`,
         h('span', { class: 'dot' }, '·'),
-        `${unit.vocab.length} 词`,
+        `${unit.vocab?.length ?? 0} 词`,
       ),
     ),
     h(
@@ -75,9 +75,8 @@ export async function renderBook(container, ctx, bookId) {
     return;
   }
 
-  await ctx.ensureBookData(bookId);
+  const data = await ctx.ensureBookData(bookId);
   if (ctx.signal.aborted) return;
-  const data = window.NCE.booksData[bookId];
   const units = data?.units || [];
   if (!units.length) throw new Error('课程数据为空');
 

@@ -16,6 +16,8 @@ const checks = [];
 let expectHttp404 = false;
 
 function check(condition, message) {
+  // 流式输出便于定位挂起步骤（正式汇总在结尾仍会打印）
+  console.error(`[smoke] ${condition ? '✓' : '✗'} ${message}`);
   if (condition) checks.push(`✓ ${message}`);
   else {
     checks.push(`✗ ${message}`);
@@ -53,7 +55,8 @@ async function metrics(page) {
   }));
 }
 
-const browser = await chromium.launch({ channel: 'msedge', headless: true });
+// 浏览器通道可用 SMOKE_BROWSER 覆盖（默认 msedge；本机只有 Chrome 时用 SMOKE_BROWSER=chrome）
+const browser = await chromium.launch({ channel: process.env.SMOKE_BROWSER || 'msedge', headless: true });
 const context = await browser.newContext({
   viewport: { width: 1440, height: 1000 },
   deviceScaleFactor: 1,
@@ -117,10 +120,10 @@ try {
 
   // 持久化
   await page.waitForTimeout(400);
-  const progress = await page.evaluate(() => window.NCE_APP?.store?.state?.progress?.['b1-u01']);
+  const progress = await page.evaluate(() => window.NCE_APP?.store?.state?.progress?.['nce1:u01']);
   check(Boolean(progress?.lastVisit), '学习进度写入 localStorage');
   await page.reload({ waitUntil: 'networkidle' });
-  const persisted = await page.evaluate(() => Boolean(window.NCE_APP?.store?.state?.progress?.['b1-u01']));
+  const persisted = await page.evaluate(() => Boolean(window.NCE_APP?.store?.state?.progress?.['nce1:u01']));
   check(persisted, '刷新后学习进度保留');
 
   // 生词 SRS：加入生词本 → 翻面 → 评分

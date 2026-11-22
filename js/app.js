@@ -20,65 +20,32 @@ import { renderReview } from './views/review.js';
 import { renderStats } from './views/stats.js';
 import { renderSettings } from './views/settings.js';
 import { renderSearch } from './views/search.js';
+import { CourseProvider } from './content/provider.js';
+import { isAutoCheckEnabled, getCatalogUrl } from './content/pack-manager.js';
 
-const bookPromises = new Map();
-let searchPromise = null;
+let courseProvider = null;
 let routeController = null;
 let routeCleanup = null;
 let profileManager = null;
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = src;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`资源加载失败：${src}`));
-    document.head.appendChild(script);
-  });
-}
-
 export function ensureBookData(bookId) {
-  const id = Number(bookId);
-  if (window.NCE?.booksData?.[id]) return Promise.resolve(window.NCE.booksData[id]);
-  if (!bookPromises.has(id)) {
-    const promise = loadScript(`./data/book${id}.js`)
-      .then(() => {
-        const data = window.NCE?.booksData?.[id];
-        if (!data) throw new Error(`第 ${id} 册数据为空`);
-        return data;
-      })
-      .catch((error) => {
-        bookPromises.delete(id);
-        throw error;
-      });
-    bookPromises.set(id, promise);
-  }
-  return bookPromises.get(id);
+  return courseProvider.ensureBookData(bookId);
 }
 
 export function ensureSearchIndex() {
-  if (window.NCE?.searchIndex) return Promise.resolve(window.NCE.searchIndex);
-  if (!searchPromise) {
-    searchPromise = loadScript('./data/search-index.js')
-      .then(() => {
-        if (!window.NCE?.searchIndex) throw new Error('搜索索引为空');
-        return window.NCE.searchIndex;
-      })
-      .catch((error) => {
-        searchPromise = null;
-        throw error;
-      });
-  }
-  return searchPromise;
+  return courseProvider.ensureSearchIndex();
 }
 
 export function getBookMeta(bookId) {
-  return window.NCE?.books?.find((book) => book.id === Number(bookId)) || null;
+  return courseProvider.getBookMeta(bookId);
 }
 
 export function getUnit(bookId, unitId) {
-  return window.NCE?.booksData?.[Number(bookId)]?.units?.find((unit) => unit.id === unitId) || null;
+  return courseProvider.getUnit(bookId, unitId);
+}
+
+export function getCourseProvider() {
+  return courseProvider;
 }
 
 function applyTheme() {
@@ -437,6 +404,10 @@ function makeContext(location, signal) {
     ensureSearchIndex,
     getBookMeta,
     getUnit,
+    getBookUnits: (bookId) => courseProvider.getBookUnits(bookId),
+    loadUnit: (bookId, unitId) => courseProvider.loadUnit(bookId, unitId),
+    listBooks: () => courseProvider.listBooks(),
+    courseProvider,
     toast,
     tts,
     recorder,
@@ -515,26 +486,49 @@ async function handleRoute(location) {
 
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator) || !window.location.protocol.startsWith('http')) return;
-  window.addEventListener('load', () => {
+  // init() 含异步资源包初始化，调用时 load 事件可能已经触发，
+  // 必须兼容 readyState === 'complete'，否则 Service Worker 永远不会注册
+  const register = () => {
     navigator.serviceWorker.register('./sw.js').catch((error) => {
       console.warn('Service worker 注册失败', error);
     });
-  });
+  };
+  if (document.readyState === 'complete') register();
+  else window.addEventListener('load', register, { once: true });
 }
 
-function init() {
-  if (!window.NCE?.books?.length) {
+async function init() {
+  try {
+    courseProvider = await CourseProvider.create({
+      onWarn: (message) => toast(message, 'error', 8000),
+    });
+  } catch (error) {
+    console.error(error);
     const view = document.getElementById('view') || document.getElementById('app');
     if (view) {
       clear(view);
       view.appendChild(
         errorView(
-          new Error('课程元数据未加载。请确认 data/books.js 存在，并通过本地服务器打开（node tools/serve.mjs）。'),
+          new Error(`课程资源包加载失败：${error?.message || error}。请通过本地服务器打开（node tools/serve.mjs）。`),
           () => window.location.reload(),
         ),
       );
     }
     return;
+  }
+
+  // 启动时自动检查资源包更新（设置中可关闭；只提醒，不自动下载）
+  if (isAutoCheckEnabled()) {
+    courseProvider.packs
+      .checkUpdates(getCatalogUrl())
+      .then(({ updates }) => {
+        if (!updates.length) return;
+        const summary = updates.map((entry) => `${entry.packId} v${entry.version}`).join('、');
+        toast(`资源包有新版本：${summary}。可在设置 → 课程资源包中更新。`, 'info', 8000);
+      })
+      .catch(() => {
+        /* 静默：目录不可达不打扰使用 */
+      });
   }
 
   store.onError = () => {
@@ -574,6 +568,10 @@ function init() {
     ensureSearchIndex,
     getBookMeta,
     getUnit,
+    getBookUnits: (bookId) => courseProvider.getBookUnits(bookId),
+    loadUnit: (bookId, unitId) => courseProvider.loadUnit(bookId, unitId),
+    listBooks: () => courseProvider.listBooks(),
+    courseProvider,
     openProfileSwitcher,
   };
 }

@@ -45,8 +45,8 @@ test('旧版单档案数据自动迁移为“我的学习”', () => {
   assert.ok(storage.getItem(manager.dataKey(manager.activeId)));
   assert.ok(storage.getItem('nce-study:v1'), '旧键保留为备份');
   assert.equal(store.key, manager.dataKey(manager.activeId));
-  assert.equal(store.state.progress['b1-u01'].status, 'done');
-  assert.equal(store.state.notes['b1-u01'], 'legacy note');
+  assert.equal(store.state.progress['nce1:u01'].status, 'done');
+  assert.equal(store.state.notes['nce1:u01'], 'legacy note');
 });
 
 test('新建/切换档案后进度互相隔离', () => {
@@ -55,14 +55,14 @@ test('新建/切换档案后进度互相隔离', () => {
   store.markVisit('b1-u01');
   const second = manager.create('小明');
   manager.switch(second.id);
-  assert.equal(store.state.progress['b1-u01'], undefined);
+  assert.equal(store.state.progress['nce1:u01'], undefined);
   store.markVisit('b2-u01');
   manager.switch(firstId);
-  assert.equal(store.state.progress['b1-u01'].status, 'learning');
-  assert.equal(store.state.progress['b2-u01'], undefined);
+  assert.equal(store.state.progress['nce1:u01'].status, 'learning');
+  assert.equal(store.state.progress['nce2:u01'], undefined);
   manager.switch(second.id);
-  assert.equal(store.state.progress['b2-u01'].status, 'learning');
-  assert.equal(store.state.progress['b1-u01'], undefined);
+  assert.equal(store.state.progress['nce2:u01'].status, 'learning');
+  assert.equal(store.state.progress['nce1:u01'], undefined);
 });
 
 test('重命名、同名拒绝、至少保留一个档案', () => {
@@ -102,10 +102,10 @@ test('全部档案导出/导入保留档案与进度', () => {
   fresh.manager.importAll(backup);
   assert.equal(fresh.manager.list().length, 2);
   assert.equal(fresh.manager.active().name, '小明');
-  assert.equal(fresh.store.state.progress['b3-u05'].status, 'learning');
+  assert.equal(fresh.store.state.progress['nce3:u05'].status, 'learning');
   fresh.manager.switch(fresh.manager.list().find((profile) => profile.name === '我的学习').id);
-  assert.equal(fresh.store.state.progress['b1-u02'].status, 'learning');
-  assert.equal(fresh.store.state.notes['b1-u01'], 'legacy note');
+  assert.equal(fresh.store.state.progress['nce1:u02'].status, 'learning');
+  assert.equal(fresh.store.state.notes['nce1:u01'], 'legacy note');
 });
 
 test('无效多档案备份会被拒绝', () => {

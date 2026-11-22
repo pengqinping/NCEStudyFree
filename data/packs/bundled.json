@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "packs": [
+    {
+      "packId": "nce-core-1-4",
+      "version": "1.0.0",
+      "base": "./data/packs/nce-core-1-4"
+    }
+  ]
+}
