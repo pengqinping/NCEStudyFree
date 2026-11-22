@@ -1,0 +1,11 @@
+[package]
+name = "tauri-plugin-nce-tts"
+version = "0.1.0"
+edition = "2021"
+description = "NCE StudyFree 原生 TTS 插件：Android 系统 TextToSpeech 桥"
+license = "MIT"
+
+[dependencies]
+tauri = { version = "2" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

@@ -18,6 +18,7 @@ const CORE = [
   './js/content/content-id.js',
   './js/content/pack-format.js',
   './js/content/pack-storage.js',
+  './js/content/pack-storage-tauri.js',
   './js/content/pack-manager.js',
   './js/content/provider.js',
   './js/vendor/fflate.js',
