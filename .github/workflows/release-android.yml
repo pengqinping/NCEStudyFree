@@ -1,0 +1,41 @@
+name: Release Android (APK)
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["app-v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 构建资源包
+        run: node tools/build-pack.mjs
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: tauri-cli,cargo-ndk
+      - name: 生成图标
+        run: cargo tauri icon assets/icons/icon-512.png
+      - name: 初始化 Android 工程
+        run: cargo tauri android init
+      - name: 并入 nce-tts 插件与录音权限
+        run: node tools/android-patch.mjs
+      - name: 构建 APK（arm64）
+        run: cargo tauri android build --apk --target aarch64-linux-android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nce-studyfree-android-arm64
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error

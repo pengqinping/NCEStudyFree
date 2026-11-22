@@ -1,0 +1,41 @@
+name: Release Desktop (macOS)
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["app-v*"]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            label: macos-arm64
+          - target: x86_64-apple-darwin
+            label: macos-x64
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 构建资源包
+        run: node tools/build-pack.mjs
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: tauri-cli
+      - name: 生成图标
+        run: cargo tauri icon assets/icons/icon-512.png
+      - name: 构建（app + dmg）
+        run: cargo tauri build --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nce-studyfree-${{ matrix.label }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
+          if-no-files-found: error

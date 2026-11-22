@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 构建资源包（.ncepack + catalog）
+        run: node tools/build-pack.mjs
+      - name: 构建旧版单册数据（对照，输出应与仓库一致）
+        run: node tools/build-data.mjs
+      - name: 校验数据完整性
+        run: node tools/validate-data.mjs
+      - name: 单元测试（含资源包/迁移）
+        run: node --test
+      - name: 校验构建产物未被意外改动
+        run: git diff --exit-code -- data/ dist/
