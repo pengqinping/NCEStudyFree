@@ -1,5 +1,5 @@
 {
-  "startedAt": "2026-10-26T07:36:30.550Z",
+  "startedAt": "2026-11-22T03:51:06.372Z",
   "sources": {
     "lrc": "https://nce.mleo.site/NCE{1..4}/book.json + {unit}.lrc",
     "notes": "https://raw.githubusercontent.com/LiDuoMiao/new-concept-english/master/notes"
@@ -5298,6 +5298,6 @@
     "lrcFailed": 0,
     "notesFailed": 0
   },
-  "finishedAt": "2026-10-26T07:36:32.670Z",
+  "finishedAt": "2026-11-22T03:51:13.560Z",
   "errors": []
 }

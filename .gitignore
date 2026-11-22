@@ -8,3 +8,4 @@ Thumbs.db
 dist/wechat/
 dist/wechat-paper/
 dist/wechat-fw/
+src-tauri/plugins/nce-tts/android/.gradle/

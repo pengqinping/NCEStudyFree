@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-11-21T12:50:58.429Z",
+  "generatedAt": "2026-11-22T03:51:28.027Z",
   "packs": [
     {
       "packId": "nce-core-1-4",
       "name": "新概念英语 1–4（核心课程包）",
       "version": "1.0.0",
       "size": 2047405,
-      "sha256": "4dc284f6200222688e376a72287e0273d966511df4a4c7fc41eec1c2d1d4e778",
+      "sha256": "d03df4fdf304ccd351ce823724ac0fa949844f4d83fcfafd8023de03e482cbfe",
       "url": "./dist/packs/nce-core-1-4-1.0.0.ncepack",
       "minAppVersion": "0.3.0"
     }
