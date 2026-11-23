@@ -6,6 +6,6 @@ Thumbs.db
 .env
 .env.*
 dist/wechat/
-dist/wechat-paper/
-dist/wechat-fw/
+dist/wechat-paper/ 
+# dist/wechat-fw/
 src-tauri/plugins/nce-tts/android/.gradle/
